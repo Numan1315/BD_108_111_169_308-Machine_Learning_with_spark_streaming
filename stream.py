@@ -140,7 +140,7 @@ def streamDataset(tcp_connection, dataset_type):    # function to stream a datas
     print(f"Starting to stream {dataset_type} dataset")
     DATASETS = [    # list of files in your dataset to stream
         "train",
-        # "test"    # uncomment to stream the test dataset
+        "test"    # uncomment to stream the test dataset
     ]
     for dataset in DATASETS:
         streamCSVFile(tcp_connection, f'{dataset_type}/{dataset}.csv')

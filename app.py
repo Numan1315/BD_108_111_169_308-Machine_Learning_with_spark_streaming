@@ -1,28 +1,36 @@
-import findspark
+#import findspark
 #import spark
 import json
-findspark.init()
 import time
 from pyspark import SparkConf, SparkContext
 from pyspark.streaming import StreamingContext
 from pyspark.sql import Row,SQLContext
-from pyspark.sql.session import SparkSession
+#from pyspark.sql.session import SparkSession
 
 import sys
-import requests
+#import requests
 
-conf = SparkConf()
+#conf = SparkConf()
 #spark = SparkSession(
 #conf.setAppName("")
-sc= SparkContext(conf = conf)
-spark = SparkSession(sc)
-ssc = StreamingContext(sc)
-#ssc.checkpoint('checkpoint')
-datastream = ssc.socketTextStream("localhost", 6100)
-x = datastream.split('/n')
-x.foreachRDD(
-#tweet = datastream.map(lam)	
-w = spark.read.json(sc.parallelize(datastream))
-
-ssc.start()
-ssc.awaitTermination()
+if __name__ == "__main__":
+	sc= SparkContext(master="local[2]",appName="stream")
+	ssc = StreamingContext(sc,10)
+	lines= ssc.socketTextStream("localhost", 6100)
+	sqlContext=SQLContext(sc)
+	word=lines.flatMap(lambda line: line.split("\n"))
+	#word=word.map(lambda lines: json.loads(lines))
+	def cnf(rd):
+		x=rd.take(1)
+		print(x[0])
+		y=json.loads(x[0])
+		return y
+		print(y)
+	rdd=word.foreachRDD(cnf)
+	#rdd.pprint()
+	#rdd=word.map(lambda x: json.loads(x))	
+	#r=json.loads(lines)
+	print("new batch")
+	ssc.start()
+	ssc.awaitTermination()
+	ssc.stop()

@@ -1,31 +1,48 @@
-#import findspark
-#import spark
-import json
-import time
-from pyspark import SparkConf, SparkContext
+
+import numpy as np
+from pyspark import SparkContext
+from pyspark.sql.session import SparkSession
 from pyspark.streaming import StreamingContext
-from pyspark.sql import Row,SQLContext
-#from pyspark.sql.session import SparkSession
+import pyspark.sql.types as tp
+#from pyspark.ml import Pipeline
+from pyspark.sql import Row,SQLContext,SparkSession
+#from pyspark.ml.feature import StringIndexer, OneHotEncoderEstimator, VectorAssembler
+#from pyspark.ml.feature import StopWordsRemover, Word2Vec, RegexTokenizer
+#from pyspark.ml.classification import LogisticRegression
+from pyspark.sql import Row
 
-import sys
-#import requests
-
-#conf = SparkConf()
-#spark = SparkSession(
-#conf.setAppName("")
 if __name__ == "__main__":
-	sc= SparkContext(master="local[2]",appName="stream")
-	ssc = StreamingContext(sc,10)
+	sc= SparkContext(master="local[2]",appName="trial")
+	ssc = StreamingContext(sc,5)
+	spark = SparkSession(sc)
 	lines= ssc.socketTextStream("localhost", 6100)
-	sqlContext=SQLContext(sc)
+	sql=SQLContext(sc)
+	
+
 	word=lines.flatMap(lambda line: line.split("\n"))
 	#word=word.map(lambda lines: json.loads(lines))
 	def cnf(rd):
-		x=rd.take(1)
-		print(x[0])
-		y=json.loads(x[0])
-		return y
-		print(y)
+		f0=[]
+		f1=[]
+		#print(rd)
+		df= spark.read.json(rd)
+		#df=sqlContext.createDataFrame(rd)
+		f=df.collect()
+		for i in f:
+			for k in i:
+				f0.append(k[0])
+				f1.append(k[1])
+		if(len(f0)!=0 and len(f1)!=0):
+			x=sql.createDataFrame(zip(f0,f1),schema=['Sentiment','Tweet'])
+			x.show()
+			print(x)
+		#print(df.collect())
+		#print(f0)
+		#x=spark.read.json(rd)
+		#sqlContext.implicits._rdd.toDf()
+		#=x.rdd.map(lambda a: (lambda b: [b[0],b[1],b[2]]))
+		#print(y.collect())
+		
 	rdd=word.foreachRDD(cnf)
 	#rdd.pprint()
 	#rdd=word.map(lambda x: json.loads(x))	
@@ -34,3 +51,4 @@ if __name__ == "__main__":
 	ssc.start()
 	ssc.awaitTermination()
 	ssc.stop()
+

@@ -13,56 +13,91 @@ from pyspark.sql import Row,SQLContext,SparkSession,functions as F
 from pyspark.ml.feature import StopWordsRemover, Word2Vec, Tokenizer
 from pyspark.ml.classification import LogisticRegression
 from pyspark.sql import Row
-from sparknlp.annotator import LemmatizerModel
+#from sparknlp.annotator import LemmatizerModel
 from pyspark.ml.feature import HashingTF
 from sklearn import model_selection
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import Perceptron,PassiveAggressiveClassifier,SGDClassifier
+from sklearn.cluster import MiniBatchKMeans
+from sklearn.metrics.pairwise import pairwise_distances_argmin
 import pickle
-global c
-c=0
+global nbc
+nbc=0
+global pc
+pc=0
+global pacc
+pacc=0
+global sgdc
+sgdc=0
 
 def naivebayes(X,y):
 	filename='nb.sav'
-	global c
-	from sklearn.naive_bayes import MultinomialNB
-	from sklearn.model_selection import train_test_split
-	#x_train,x_test,y_train,y_test=train_test_split(X,y,test_size=0.2,random_state=0)
-	if(c==0):
-		clf=MultinomialNB()
-		c=1
+	global nbc
+	if(nbc==0):
+		clf=MultinomialNB(alpha=0.1)
+		nbc=1
 	else:
 		clf=pickle.load(open(filename,'rb'))
-		c+=1
+		nbc+=1
 	clf=clf.partial_fit(X, y,classes=[0,4])
-	#print(clf.score(x_test,y_test),"pf\n")
-	#clf1 = MultinomialNB()
-	#clf1.fit(x_train, y_train)
-	#print(clf1.score(x_test,y_test),"rf\n")
 	pickle.dump(clf,open(filename,'wb'))
 
+def sgd(X,y):
+	filename='sgd.sav'
+	global sgdc
+	if(sgdc==0):
+		clf=SGDClassifier(loss='modified_huber',penalty='l2')
+		sgdc=1
+	else:
+		clf=pickle.load(open(filename,'rb'))
+		sgdc+=1
+	clf=clf.partial_fit(X, y,classes=[0,4])
+	pickle.dump(clf,open(filename,'wb'))
+
+def percept(X,y):
+	filename='p.sav'
+	global pc
+	if(pc==0):
+		p=Perceptron(alpha=0.0001)
+		pc=1
+	else:
+		p=pickle.load(open(filename,'rb'))
+		pc+=1
+	p=p.partial_fit(X,y,classes=[0,4])
+	pickle.dump(p,open(filename,'wb'))
+def pac(X,y):
+	filename='pac.sav'
+	global pacc
+	if(pacc==0):
+		p=PassiveAggressiveClassifier(C=0.003,loss='squared_hinge')
+		pacc=1
+	else:
+		p=pickle.load(open(filename,'rb'))
+		pacc+=1
+	p.partial_fit(X, y,classes=[0,4])
+	pickle.dump(p,open(filename,'wb'))
+
 if __name__ == "__main__":
-	sc= SparkContext(master="local[2]",appName="trial")
+	sc= SparkContext(master="local[*]",appName="trial")
 	ssc = StreamingContext(sc,5)
 	spark = SparkSession(sc)
 	lines= ssc.socketTextStream("localhost", 6100)
 	sql=SQLContext(sc)
-	lemmatizer=WordNetLemmatizer()
 	porter=PorterStemmer()
 	word=lines.flatMap(lambda line: line.split("\n"))
-	#word=word.map(lambda lines: json.loads(lines))
 	def cnf(rd):
 		f0=[]
 		f1=[]
 		f2=[]
-		#print(rd)
 		df= spark.read.json(rd)
-		#df=sqlContext.createDataFrame(rd)
 		f=df.collect()
 		for i in f:
 			for k in i:
 				f0.append(k[0])
 				f1.append(k[1].strip())
 		if(len(f0)!=0 and len(f1)!=0):
-			x=sql.createDataFrame(zip(f0,f1,f1),schema=['Sentiment','Tweet1','Tweet'])
+			x=sql.createDataFrame(zip(f0,f1),schema=['Sentiment','Tweet'])
 			x=x.withColumn('Tweet',F.regexp_replace('Tweet',r'http\S+',''))
 			x=x.withColumn('Tweet',F.regexp_replace('Tweet','@\w+',''))
 			x=x.withColumn('Tweet',F.regexp_replace('Tweet','#',''))
@@ -88,7 +123,7 @@ if __name__ == "__main__":
 			x = x.withColumn("row_idx", row_number().over(Window.orderBy(monotonically_increasing_id())))
 			b = b.withColumn("row_idx", row_number().over(Window.orderBy(monotonically_increasing_id())))
 			x = x.join(b, x.row_idx == b.row_idx).\
-				     drop("row_idx")
+				     drop("row_idx","Tweet")
 			
 			from sklearn.feature_extraction.text import HashingVectorizer
 			vectorizer = HashingVectorizer(lowercase=True,stop_words={'english'},analyzer='word',alternate_sign=False)
@@ -99,15 +134,13 @@ if __name__ == "__main__":
 			
 			val2=x.select('Sentiment').collect()
 			ytrain=[ele.__getattr__('Sentiment') for ele in val2]
-			clf=naivebayes(Xtrain_vect,ytrain)
-			print(c)
-		
+			naivebayes(Xtrain_vect,ytrain)
+			sgd(Xtrain_vect,ytrain)
+			percept(Xtrain_vect,ytrain)
+			pac(Xtrain_vect,ytrain)
+			print(pacc)	
 	word.foreachRDD(cnf)
-	#rdd.pprint()
-	#rdd=word.map(lambda x: json.loads(x))	
-	#r=json.loads(lines)
 	ssc.start()
 	ssc.awaitTermination()
-	print('done')
 	ssc.stop()
 

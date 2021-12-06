@@ -80,7 +80,7 @@ def pac(X,y):
 
 if __name__ == "__main__":
 	sc= SparkContext(master="local[*]",appName="trial")
-	ssc = StreamingContext(sc,5)
+	ssc = StreamingContext(sc,15)
 	spark = SparkSession(sc)
 	lines= ssc.socketTextStream("localhost", 6100)
 	sql=SQLContext(sc)
